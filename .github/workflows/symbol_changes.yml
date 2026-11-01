@@ -1,0 +1,32 @@
+name: Fetch NSE symbol changes
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/symbol_changes.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          curl -sSfL -A "$UA" -e "https://www.nseindia.com/" -o data/symbolchange.csv \
+            https://nsearchives.nseindia.com/content/equities/symbolchange.csv
+          curl -sSfL -A "$UA" -e "https://www.nseindia.com/" -o data/namechange.csv \
+            https://nsearchives.nseindia.com/content/equities/namechange.csv || true
+          wc -l data/symbolchange.csv
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/symbolchange.csv data/namechange.csv 2>/dev/null || git add data/symbolchange.csv
+          git diff --cached --quiet && exit 0
+          git commit -m "NSE symbol changes $(date -u +%F)"
+          git pull --rebase origin main
+          git push origin HEAD:main
