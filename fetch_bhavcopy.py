@@ -51,6 +51,10 @@ def parse(raw, d):
 
 
 def main(year, out_dir):
+    done = os.path.join("data", f"prices_{year}.parquet")
+    if os.path.exists(done) and year < dt.date.today().year:
+        print(f"{year}: already saved in data/, skipping")
+        return
     s = requests.Session()
     s.headers.update(HEAD)
     try:
