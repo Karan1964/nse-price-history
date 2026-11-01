@@ -45,7 +45,7 @@ def parse(raw, d):
                                 "LOW": "low", "CLOSE": "close", "PREVCLOSE": "prevclose", "TOTTRDVAL": "value"})
     df["series"] = df["series"].astype(str).str.strip()
     df = df[df["series"].isin(SERIES)]
-    out = df[["symbol", "series", "isin", "high", "low", "close", "prevclose", "value"]].copy()
+    out = df.reindex(columns=["symbol", "series", "isin", "high", "low", "close", "prevclose", "value"]).copy()
     out["date"] = pd.Timestamp(d)
     return out
 
@@ -70,8 +70,11 @@ def main(year, out_dir):
                         time.sleep(3 * (attempt + 1))
                         continue
                     if r.status_code == 200 and r.content[:2] == b"PK":
-                        frames.append(parse(r.content, d))
-                        got = True
+                        try:
+                            frames.append(parse(r.content, d))
+                            got = True
+                        except Exception as e:  # noqa: BLE001
+                            print(f"{d}: could not parse ({e!r})")
                     elif r.status_code in (403, 429, 503):
                         time.sleep(10 * (attempt + 1))
                         continue
@@ -86,7 +89,7 @@ def main(year, out_dir):
     if frames:
         df = pd.concat(frames, ignore_index=True)
         for c in ("symbol", "series", "isin"):
-            df[c] = df[c].astype(str).str.strip().astype("category")
+            df[c] = df[c].fillna("").astype(str).str.strip().astype("category")
         for c in ("high", "low", "close", "prevclose", "value"):
             df[c] = pd.to_numeric(df[c], errors="coerce").astype("float64")
         df.to_parquet(os.path.join(out_dir, f"prices_{year}.parquet"), compression="zstd", index=False)
