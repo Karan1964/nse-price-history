@@ -1,0 +1,62 @@
+name: Fetch NSE price history (2010 onwards)
+
+# Public repo: GitHub Actions minutes are free here.
+# One job per year in parallel, then one job saves all years under data/.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/fetch_prices.yml"
+      - "fetch_bhavcopy.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-prices
+  cancel-in-progress: false
+
+jobs:
+  year:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        year: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas pyarrow requests
+      - run: python fetch_bhavcopy.py ${{ matrix.year }} out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prices-${{ matrix.year }}
+          path: out/
+          retention-days: 7
+
+  save:
+    needs: year
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+          pattern: prices-*
+          merge-multiple: true
+      - name: Commit data
+        run: |
+          mkdir -p data
+          cp art/* data/ 2>/dev/null || true
+          ls -la data
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && exit 0
+          git commit -m "NSE daily prices $(date -u +%F)"
+          git push
