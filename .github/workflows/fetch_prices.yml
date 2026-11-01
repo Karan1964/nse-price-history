@@ -59,4 +59,5 @@ jobs:
           git add data
           git diff --cached --quiet && exit 0
           git commit -m "NSE daily prices $(date -u +%F)"
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
