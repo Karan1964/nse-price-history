@@ -1,0 +1,38 @@
+name: Export prices as CSV
+
+# Also save each year as gzipped CSV, for tools without a parquet reader.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/export_csv.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pandas pyarrow
+      - run: |
+          mkdir -p csv
+          python - <<'PY'
+          import glob, os, pandas as pd
+          for f in sorted(glob.glob("data/prices_*.parquet")):
+              out = "csv/" + os.path.basename(f).replace(".parquet", ".csv.gz")
+              pd.read_parquet(f).to_csv(out, index=False, compression="gzip")
+              print(out, os.path.getsize(out) // 1_000_000, "MB")
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add csv
+          git diff --cached --quiet && exit 0
+          git commit -m "CSV copies of price data"
+          git pull --rebase origin main
+          git push origin HEAD:main
